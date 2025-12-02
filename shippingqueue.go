@@ -1,0 +1,123 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"math/rand"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+)
+
+// StartShippingWorker starts the background listener loop
+func StartShippingWorker(service *ShippingService) {
+	queueName := os.Getenv("SHIPPING_QUEUE_NAME")
+	if queueName == "" {
+		log.Fatal("SHIPPING_QUEUE_NAME not set")
+	}
+
+	// Initialize Client
+	var sbClient *azservicebus.Client
+	var err error
+	asbConnStr := os.Getenv("ASB_CONNECTION_STRING")
+
+	if asbConnStr != "" {
+		sbClient, err = azservicebus.NewClientFromConnectionString(asbConnStr, nil)
+	} else {
+		hostName := os.Getenv("AZURE_SERVICEBUS_FULLYQUALIFIEDNAMESPACE")
+		cred, _ := azidentity.NewDefaultAzureCredential(nil)
+		sbClient, err = azservicebus.NewClient(hostName, cred, nil)
+	}
+
+	if err != nil {
+		log.Fatalf("ASB connection failed: %v", err)
+	}
+
+	receiver, err := sbClient.NewReceiverForQueue(queueName, nil)
+	if err != nil {
+		log.Fatalf("Failed to create receiver: %v", err)
+	}
+
+	ctx := context.Background()
+	log.Printf("Shipping Worker listening on queue: %s", queueName)
+
+	for {
+		// Block until message arrives
+		messages, err := receiver.ReceiveMessages(ctx, 1, nil)
+		if err != nil {
+			log.Printf("Error receiving message: %v. Retrying in 5s...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		for _, msg := range messages {
+			processMessage(ctx, service, receiver, msg)
+		}
+	}
+}
+
+func processMessage(ctx context.Context, service *ShippingService, receiver *azservicebus.Receiver, msg *azservicebus.ReceivedMessage) {
+	var req ShippingRequest
+	if err := json.Unmarshal(msg.Body, &req); err != nil {
+		log.Printf("Invalid message format: %v", err)
+		receiver.AbandonMessage(ctx, msg, nil)
+		return
+	}
+
+	log.Printf("Processing shipment for Order %s to %s", req.OrderID, req.Shipping.PostalCode)
+
+	// 1. Calculate Logic
+	duration := calculateDuration(req.Shipping.PostalCode)
+	trackingNum := fmt.Sprintf("TN-%d-%s", rand.Intn(9999), req.OrderID)
+
+	// 2. Store Record
+	record := ShipmentRecord{
+		OrderID:         req.OrderID,
+		TrackingNumber:  trackingNum,
+		Duration:        duration,
+		Destination:     req.Shipping.PostalCode,
+		ShippedAt:       time.Now(),
+		EstimatedArrive: time.Now().Add(time.Duration(duration) * time.Second),
+	}
+
+	if err := service.repo.InsertShipment(record); err != nil {
+		log.Printf("Failed to save shipment record: %v", err)
+		receiver.AbandonMessage(ctx, msg, nil)
+		return
+	}
+
+	// 3. Complete Message (Ack)
+	receiver.CompleteMessage(ctx, msg, nil)
+
+	// 4. Simulate Delivery (Async)
+	go simulateDelivery(service, req.OrderID, duration)
+}
+
+func simulateDelivery(service *ShippingService, orderID string, duration int) {
+	log.Printf("Order %s is In Transit (%ds)...", orderID, duration)
+
+	time.Sleep(time.Duration(duration) * time.Second)
+
+	// 5. Update Order Status to 3 (Delivered)
+	if err := service.repo.UpdateOrderStatus(orderID, 3); err != nil {
+		log.Printf("Failed to update status for %s: %v", orderID, err)
+	} else {
+		log.Printf("Order %s Delivered!", orderID)
+	}
+}
+
+func calculateDuration(postalCode string) int {
+	normalized := strings.ToUpper(strings.ReplaceAll(postalCode, " ", ""))
+	if strings.HasPrefix(normalized, "K") {
+		return 10 + rand.Intn(11) // 10-20s
+	} else if strings.HasPrefix(normalized, "L") || strings.HasPrefix(normalized, "M") {
+		return 20 + rand.Intn(21) // 20-40s
+	} else {
+		return 50 + rand.Intn(51) // 50-100s
+	}
+}
