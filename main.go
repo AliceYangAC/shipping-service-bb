@@ -38,16 +38,12 @@ func main() {
 	// 3. Start HTTP Server
 	r := gin.Default()
 	r.Use(cors.Default())
-	r.POST("/ship", func(c *gin.Context) {
+	r.POST("/", func(c *gin.Context) {
 		handleShipRequest(c)
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3003"
-	}
-	log.Printf("Shipping Service running on :%s", port)
-	r.Run(":" + port)
+	log.Printf("Shipping Service running on :3003")
+	r.Run(":3003")
 }
 
 func handleShipRequest(c *gin.Context) {
@@ -57,8 +53,7 @@ func handleShipRequest(c *gin.Context) {
 		return
 	}
 
-	// Setup temporary sender connection (similar to makeline pattern)
-	// In production, use a shared client singleton.
+	// Setup temporary sender connection
 	asbConnStr := os.Getenv("ASB_CONNECTION_STRING")
 	client, _ := azservicebus.NewClientFromConnectionString(asbConnStr, nil)
 	sender, _ := client.NewSender(os.Getenv("SHIPPING_QUEUE_NAME"), nil)

@@ -75,7 +75,6 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 	duration := calculateDuration(req.Shipping.PostalCode)
 	trackingNum := fmt.Sprintf("TN-%d-%s", rand.Intn(9999), req.OrderID)
 
-	// 2. Store Record
 	record := ShipmentRecord{
 		OrderID:         req.OrderID,
 		TrackingNumber:  trackingNum,
@@ -89,6 +88,10 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 		log.Printf("Failed to save shipment record: %v", err)
 		receiver.AbandonMessage(ctx, msg, nil)
 		return
+	}
+
+	if err := service.repo.UpdateOrderStatus(req.OrderID, 2); err != nil {
+		log.Printf("Failed to update order status to Shipped: %v", err)
 	}
 
 	// 3. Complete Message (Ack)
@@ -114,10 +117,10 @@ func simulateDelivery(service *ShippingService, orderID string, duration int) {
 func calculateDuration(postalCode string) int {
 	normalized := strings.ToUpper(strings.ReplaceAll(postalCode, " ", ""))
 	if strings.HasPrefix(normalized, "K") {
-		return 10 + rand.Intn(11) // 10-20s
+		return 20 + rand.Intn(11) // 20-30s
 	} else if strings.HasPrefix(normalized, "L") || strings.HasPrefix(normalized, "M") {
-		return 20 + rand.Intn(21) // 20-40s
+		return 30 + rand.Intn(11) // 30-40s
 	} else {
-		return 50 + rand.Intn(51) // 50-100s
+		return 75 + rand.Intn(26) // 75-100s
 	}
 }

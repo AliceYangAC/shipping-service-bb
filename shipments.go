@@ -8,7 +8,7 @@ import (
 type ShippingRequest struct {
 	OrderID  string       `json:"orderId"`
 	Shipping ShippingInfo `json:"shipping"`
-	Status   string       `json:"status"`
+	Status   int          `json:"status"`
 }
 
 type ShippingInfo struct {
