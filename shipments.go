@@ -21,12 +21,12 @@ type ShippingInfo struct {
 
 // Record stored in MongoDB
 type ShipmentRecord struct {
-	OrderID         string    `bson:"orderId"`
-	TrackingNumber  string    `bson:"trackingNumber"`
-	Duration        int       `bson:"durationSeconds"`
-	Destination     string    `bson:"destination"`
-	ShippedAt       time.Time `bson:"shippedAt"`
-	EstimatedArrive time.Time `bson:"estimatedArrive"`
+	OrderID         string    `bson:"orderId" json:"orderId"`
+	TrackingNumber  string    `bson:"trackingNumber" json:"trackingNumber"`
+	Duration        int       `bson:"shippingDuration" json:"shippingDuration"`
+	Destination     string    `bson:"destination" json:"destination"`
+	ShippedAt       time.Time `bson:"shippedAt" json:"shippedAt"`
+	EstimatedArrive time.Time `bson:"estimatedArrive" json:"estimatedArrive"`
 }
 
 // Repository Interface
