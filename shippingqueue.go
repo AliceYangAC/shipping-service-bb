@@ -90,7 +90,7 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 		return
 	}
 
-	if err := service.repo.UpdateOrderStatus(req.OrderID, 2); err != nil {
+	if err := service.repo.UpdateOrderStatus(req.OrderID, 2, duration); err != nil {
 		log.Printf("Failed to update order status to Shipped: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func simulateDelivery(service *ShippingService, orderID string, duration int) {
 	time.Sleep(time.Duration(duration) * time.Second)
 
 	// 5. Update Order Status to 3 (Delivered)
-	if err := service.repo.UpdateOrderStatus(orderID, 3); err != nil {
+	if err := service.repo.UpdateOrderStatus(orderID, 3, duration); err != nil {
 		log.Printf("Failed to update status for %s: %v", orderID, err)
 	} else {
 		log.Printf("Order %s Delivered!", orderID)

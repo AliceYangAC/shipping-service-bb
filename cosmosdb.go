@@ -97,7 +97,7 @@ func (r *CosmosDBServiceRepo) InsertShipment(record ShipmentRecord) error {
 }
 
 // 2. UpdateOrderStatus
-func (r *CosmosDBServiceRepo) UpdateOrderStatus(orderID string, status int) error {
+func (r *CosmosDBServiceRepo) UpdateOrderStatus(orderID string, status int, duration int) error {
 	ctx := context.Background()
 	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
 
@@ -138,6 +138,7 @@ func (r *CosmosDBServiceRepo) UpdateOrderStatus(orderID string, status int) erro
 	// B. Patch the status
 	patch := azcosmos.PatchOperations{}
 	patch.AppendReplace("/status", status)
+	patch.AppendReplace("/duration", duration)
 
 	_, err := r.ordersContainer.PatchItem(ctx, pk, existingId, patch, nil)
 	return err

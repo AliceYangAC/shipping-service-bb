@@ -39,10 +39,10 @@ func (r *MongoDBShippingRepo) InsertShipment(record ShipmentRecord) error {
 	return err
 }
 
-func (r *MongoDBShippingRepo) UpdateOrderStatus(orderID string, status int) error {
+func (r *MongoDBShippingRepo) UpdateOrderStatus(orderID string, status int, duration int) error {
 	coll := r.client.Database(r.dbName).Collection("orders")
 	filter := bson.M{"orderid": orderID}
-	update := bson.M{"$set": bson.M{"status": status}}
+	update := bson.M{"$set": bson.M{"status": status, "duration": duration}}
 
 	_, err := coll.UpdateOne(context.Background(), filter, update)
 	return err

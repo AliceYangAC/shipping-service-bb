@@ -23,7 +23,7 @@ type ShippingInfo struct {
 type ShipmentRecord struct {
 	OrderID         string    `bson:"orderId" json:"orderId"`
 	TrackingNumber  string    `bson:"trackingNumber" json:"trackingNumber"`
-	Duration        int       `bson:"shippingDuration" json:"shippingDuration"`
+	Duration        int       `bson:"duration" json:"duration"`
 	Destination     string    `bson:"destination" json:"destination"`
 	ShippedAt       time.Time `bson:"shippedAt" json:"shippedAt"`
 	EstimatedArrive time.Time `bson:"estimatedArrive" json:"estimatedArrive"`
@@ -32,7 +32,7 @@ type ShipmentRecord struct {
 // Repository Interface
 type ShippingRepo interface {
 	InsertShipment(record ShipmentRecord) error
-	UpdateOrderStatus(orderID string, status int) error
+	UpdateOrderStatus(orderID string, status int, duration int) error
 }
 
 type ShippingService struct {
