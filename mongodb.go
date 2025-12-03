@@ -43,7 +43,36 @@ func NewMongoDBShippingRepo(mongoUri string, mongoDb string, mongoCollection str
 	}, nil
 }
 
-// UpdateOrderShipmentInfo is the comprehensive update method (Status 2 and Status 3)
+func (r *MongoDBShippingRepo) UpdateOrderDelivered(orderID string, status int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Target the 'orders' collection
+	coll := r.client.Database(r.dbName).Collection("orders")
+
+	// Filter by orderID (assuming 'orderId' is the BSON key)
+	filter := bson.M{"orderId": orderID}
+
+	// Simple status update
+	update := bson.M{
+		"$set": bson.M{
+			"status": status,
+		},
+	}
+
+	_, err := coll.UpdateOne(ctx, filter, update)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Printf("Order %s not found for simple status update.", orderID)
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// UpdateOrderShipmentInfo is the comprehensive update method
 func (r *MongoDBShippingRepo) UpdateOrderShipmentInfo(orderID string, status int, shipment ShipmentRecord) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -52,8 +81,10 @@ func (r *MongoDBShippingRepo) UpdateOrderShipmentInfo(orderID string, status int
 
 	update := bson.M{
 		"$set": bson.M{
-			"status":   status,
-			"shipment": shipment, // Embeds the entire ShipmentRecord struct
+			"status":                  status,
+			"shipping.duration":       shipment.Duration,
+			"shipping.trackingNumber": shipment.TrackingNumber,
+			"shipping.shippedAt":      shipment.ShippedAt, // Optionally add timestamp
 		},
 	}
 

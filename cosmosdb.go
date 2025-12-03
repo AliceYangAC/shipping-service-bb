@@ -66,6 +66,53 @@ func createContainerClients(client *azcosmos.Client, dbName string, pk Partition
 	}, nil
 }
 
+func (r *CosmosDBServiceRepo) UpdateOrderDelivered(orderID string, status int) error {
+	ctx := context.Background()
+	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
+
+	// Find the internal Cosmos 'id' using the OrderID
+	var existingId string
+	query := "SELECT * FROM o WHERE o.orderId = @orderId"
+	opt := &azcosmos.QueryOptions{
+		QueryParameters: []azcosmos.QueryParameter{
+			{Name: "@orderId", Value: orderID},
+		},
+	}
+
+	pager := r.ordersContainer.NewQueryItemsPager(query, pk, opt)
+
+	for pager.More() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			log.Printf("Query error: %v", err)
+			return err
+		}
+		for _, bytes := range resp.Items {
+			var doc map[string]interface{}
+			if err := json.Unmarshal(bytes, &doc); err == nil {
+				existingId = doc["id"].(string)
+				break
+			}
+		}
+		if existingId != "" {
+			break
+		}
+	}
+
+	if existingId == "" {
+		log.Printf("Order %s not found in CosmosDB", orderID)
+		return nil
+	}
+
+	// Prepare the Patch to update only the status
+	patch := azcosmos.PatchOperations{}
+	patch.AppendReplace("/status", status)
+
+	// Execute the Patch
+	_, err := r.ordersContainer.PatchItem(ctx, pk, existingId, patch, nil)
+	return err
+}
+
 func (r *CosmosDBServiceRepo) UpdateOrderShipmentInfo(orderID string, status int, shipment ShipmentRecord) error {
 	ctx := context.Background()
 	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
@@ -104,9 +151,7 @@ func (r *CosmosDBServiceRepo) UpdateOrderShipmentInfo(orderID string, status int
 		return nil
 	}
 
-	// B. Prepare the Shipment Record for Embedding
-	// We must marshal the struct to JSON and then unmarshal it into a map[string]interface{}
-	// before patching, as the azcosmos Patch API expects a valid JSON value.
+	// Prepare the shipment object for adding into shipping field
 	shipmentBytes, err := json.Marshal(shipment)
 	if err != nil {
 		return err
@@ -122,8 +167,10 @@ func (r *CosmosDBServiceRepo) UpdateOrderShipmentInfo(orderID string, status int
 	// 1. Patch the root status field
 	patch.AppendReplace("/status", status)
 
-	// 2. Embed the entire shipment object under the 'shipment' key
-	patch.AppendReplace("/shipment", shipmentJson)
+	// Add duration, startAt, and trackingNumber under shipping
+	patch.AppendReplace("/shipping/duration", shipmentJson["duration"])
+	patch.AppendReplace("/shipping/trackingNumber", shipmentJson["trackingNumber"])
+	patch.AppendReplace("/shipping/shippedAt", shipmentJson["shippedAt"])
 
 	// D. Execute the Patch
 	_, err = r.ordersContainer.PatchItem(ctx, pk, existingId, patch, nil)

@@ -32,6 +32,7 @@ type ShipmentRecord struct {
 // Repository Interface
 type ShippingRepo interface {
 	UpdateOrderShipmentInfo(orderID string, status int, shipment ShipmentRecord) error
+	UpdateOrderDelivered(orderID string, status int) error
 }
 
 type ShippingService struct {

@@ -83,17 +83,18 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 		EstimatedArrive: time.Now().Add(time.Duration(duration) * time.Second),
 	}
 
-	// Update Order with Shipment Info and Status=2 (In Transit)
+	// Update Order with shipment details and Status=2 (Shipped)
 	if err := service.repo.UpdateOrderShipmentInfo(req.OrderID, 2, shipmentDetails); err != nil {
-		log.Printf("Failed to update Order %s with shipment info: %v", req.OrderID, err)
+		log.Printf("Failed to set Order %s to Status 2: %v", req.OrderID, err)
 		receiver.AbandonMessage(ctx, msg, nil)
 		return
 	}
+	log.Printf("Order %s updated to Status 2 (Shipped).", req.OrderID) // Confirmation log
 
-	// Complete the message
+	// 3. Complete the message (Ack)
 	receiver.CompleteMessage(ctx, msg, nil)
 
-	// Start delivery simulation in background
+	// 4. Start delivery simulation in background
 	go simulateDelivery(service, req.OrderID, duration, shipmentDetails)
 }
 
@@ -102,9 +103,9 @@ func simulateDelivery(service *ShippingService, orderID string, duration int, sh
 
 	time.Sleep(time.Duration(duration) * time.Second)
 
-	// Update Order status to 3 (Delivered)
-	if err := service.repo.UpdateOrderShipmentInfo(orderID, 3, shipmentDetails); err != nil {
-		log.Printf("Failed to update status for %s: %v", orderID, err)
+	// Update Order to Status=3 (Delivered)
+	if err := service.repo.UpdateOrderDelivered(orderID, 3); err != nil {
+		log.Printf("Failed to update status for %s to Status 3: %v", orderID, err)
 	} else {
 		log.Printf("Order %s Delivered!", orderID)
 	}
