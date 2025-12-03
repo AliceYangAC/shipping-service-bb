@@ -50,8 +50,8 @@ func (r *MongoDBShippingRepo) UpdateOrderDelivered(orderID string, status int) e
 	// Target the 'orders' collection
 	coll := r.client.Database(r.dbName).Collection("orders")
 
-	// Filter by orderID (assuming 'orderId' is the BSON key)
-	filter := bson.M{"orderId": orderID}
+	// Filter by orderID
+	filter := bson.M{"orderid": orderID}
 
 	// Simple status update
 	update := bson.M{
@@ -77,7 +77,7 @@ func (r *MongoDBShippingRepo) UpdateOrderShipmentInfo(orderID string, status int
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{"orderId": orderID}
+	filter := bson.M{"orderid": orderID}
 
 	update := bson.M{
 		"$set": bson.M{
