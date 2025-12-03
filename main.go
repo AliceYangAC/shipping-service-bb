@@ -37,6 +37,7 @@ func main() {
 
 	// 3. Start HTTP Server
 	r := gin.Default()
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1", "172.18.0.0/16"})
 	r.Use(cors.Default())
 	r.POST("/", func(c *gin.Context) {
 		handleShipRequest(c)
@@ -126,6 +127,9 @@ func initDatabase(apiType string) (*ShippingService, error) {
 		}
 	default:
 		collectionName := getEnvVar("SHIPPING_DB_COLLECTION_NAME")
+		if collectionName == "" {
+			collectionName = "orders"
+		}
 		dbUsername := os.Getenv("SHIPPING_DB_USERNAME")
 		dbPassword := os.Getenv("SHIPPING_DB_PASSWORD")
 		mongoRepo, err := NewMongoDBShippingRepo(dbURI, dbName, collectionName, dbUsername, dbPassword)
