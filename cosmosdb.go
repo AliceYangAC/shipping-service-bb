@@ -33,7 +33,8 @@ func NewCosmosDBServiceRepoWithManagedIdentity(cosmosDbEndpoint string, dbName s
 		return nil, err
 	}
 
-	return createContainerClients(client, dbName, partitionKey)
+	// FIX: Pass containerName to the helper
+	return createContainerClients(client, dbName, containerName, partitionKey)
 }
 
 func NewCosmosDBServiceRepo(cosmosDbEndpoint string, dbName string, containerName string, cosmosDbKey string, partitionKey PartitionKey) (*CosmosDBServiceRepo, error) {
@@ -49,13 +50,15 @@ func NewCosmosDBServiceRepo(cosmosDbEndpoint string, dbName string, containerNam
 		return nil, err
 	}
 
-	return createContainerClients(client, dbName, partitionKey)
+	// FIX: Pass containerName to the helper
+	return createContainerClients(client, dbName, containerName, partitionKey)
 }
 
-// Helper to initialize both container clients
-func createContainerClients(client *azcosmos.Client, dbName string, pk PartitionKey) (*CosmosDBServiceRepo, error) {
+// added containerName parameter
+func createContainerClients(client *azcosmos.Client, dbName string, containerName string, pk PartitionKey) (*CosmosDBServiceRepo, error) {
 
-	ordersContainer, err := client.NewContainer(dbName, "orders")
+	// use the passed containerName instead of hardcoded "orders"
+	ordersContainer, err := client.NewContainer(dbName, containerName)
 	if err != nil {
 		return nil, err
 	}

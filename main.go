@@ -96,14 +96,17 @@ func getEnvVar(varName string, fallbackVarNames ...string) string {
 
 // Initializes the database based on the API type
 func initDatabase(apiType string) (*ShippingService, error) {
-	dbURI := getEnvVar("AZURE_COSMOS_RESOURCEENDPOINT", "SHIPPING_DB_URI")
-	dbName := getEnvVar("SHIPPING_DB_NAME")
+	// FIX: Updated to match ORDER_DB_URI
+	dbURI := getEnvVar("AZURE_COSMOS_RESOURCEENDPOINT", "ORDER_DB_URI")
+	// FIX: Updated to match ORDER_DB_NAME
+	dbName := getEnvVar("ORDER_DB_NAME")
 
 	switch apiType {
 	case AZURE_COSMOS_DB_SQL_API:
-		containerName := getEnvVar("SHIPPING_DB_CONTAINER_NAME")
-		dbPartitionKey := getEnvVar("SHIPPING_DB_PARTITION_KEY")
-		dbPartitionValue := getEnvVar("SHIPPING_DB_PARTITION_VALUE")
+		// FIX: Updated to match ORDER_DB_... variables
+		containerName := getEnvVar("ORDER_DB_CONTAINER_NAME")
+		dbPartitionKey := getEnvVar("ORDER_DB_PARTITION_KEY")
+		dbPartitionValue := getEnvVar("ORDER_DB_PARTITION_VALUE")
 
 		// check if USE_WORKLOAD_IDENTITY_AUTH is set
 		useWorkloadIdentityAuth := os.Getenv("USE_WORKLOAD_IDENTITY_AUTH")
@@ -118,7 +121,7 @@ func initDatabase(apiType string) (*ShippingService, error) {
 			}
 			return NewShippingService(cosmosRepo), nil
 		} else {
-			dbPassword := os.Getenv("SHIPPING_DB_PASSWORD")
+			dbPassword := os.Getenv("ORDER_DB_PASSWORD") // Updated just in case
 			cosmosRepo, err := NewCosmosDBServiceRepo(dbURI, dbName, containerName, dbPassword, PartitionKey{dbPartitionKey, dbPartitionValue})
 			if err != nil {
 				return nil, err
@@ -126,12 +129,13 @@ func initDatabase(apiType string) (*ShippingService, error) {
 			return NewShippingService(cosmosRepo), nil
 		}
 	default:
-		collectionName := getEnvVar("SHIPPING_DB_COLLECTION_NAME")
+		// Keep MongoDB fallback logic if needed, but updated names
+		collectionName := getEnvVar("ORDER_DB_COLLECTION_NAME")
 		if collectionName == "" {
 			collectionName = "orders"
 		}
-		dbUsername := os.Getenv("SHIPPING_DB_USERNAME")
-		dbPassword := os.Getenv("SHIPPING_DB_PASSWORD")
+		dbUsername := os.Getenv("ORDER_DB_USERNAME")
+		dbPassword := os.Getenv("ORDER_DB_PASSWORD")
 		mongoRepo, err := NewMongoDBShippingRepo(dbURI, dbName, collectionName, dbUsername, dbPassword)
 		if err != nil {
 			return nil, err
