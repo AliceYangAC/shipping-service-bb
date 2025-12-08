@@ -71,11 +71,10 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 
 	log.Printf("Processing shipment for Order %s to %s", req.OrderID, req.Shipping.PostalCode)
 
-	// 1. Calculate Logic
 	duration := calculateDuration(req.Shipping.PostalCode)
 	trackingNum := fmt.Sprintf("TN-%d-%s", rand.Intn(9999), req.OrderID)
 
-	record := ShipmentRecord{
+	shipmentDetails := ShipmentRecord{
 		OrderID:         req.OrderID,
 		TrackingNumber:  trackingNum,
 		Duration:        duration,
@@ -84,31 +83,29 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 		EstimatedArrive: time.Now().Add(time.Duration(duration) * time.Second),
 	}
 
-	if err := service.repo.InsertShipment(record); err != nil {
-		log.Printf("Failed to save shipment record: %v", err)
+	// Update Order with shipment details and Status=2 (Shipped)
+	if err := service.repo.UpdateOrderShipmentInfo(req.OrderID, 2, shipmentDetails); err != nil {
+		log.Printf("Failed to set Order %s to Status 2: %v", req.OrderID, err)
 		receiver.AbandonMessage(ctx, msg, nil)
 		return
 	}
+	log.Printf("Order %s updated to Status 2 (Shipped).", req.OrderID) // Confirmation log
 
-	if err := service.repo.UpdateOrderStatus(req.OrderID, 2, duration); err != nil {
-		log.Printf("Failed to update order status to Shipped: %v", err)
-	}
-
-	// 3. Complete Message (Ack)
+	// 3. Complete the message (Ack)
 	receiver.CompleteMessage(ctx, msg, nil)
 
-	// 4. Simulate Delivery (Async)
-	go simulateDelivery(service, req.OrderID, duration)
+	// 4. Start delivery simulation in background
+	go simulateDelivery(service, req.OrderID, duration, shipmentDetails)
 }
 
-func simulateDelivery(service *ShippingService, orderID string, duration int) {
+func simulateDelivery(service *ShippingService, orderID string, duration int, shipmentDetails ShipmentRecord) {
 	log.Printf("Order %s is In Transit (%ds)...", orderID, duration)
 
 	time.Sleep(time.Duration(duration) * time.Second)
 
-	// 5. Update Order Status to 3 (Delivered)
-	if err := service.repo.UpdateOrderStatus(orderID, 3, duration); err != nil {
-		log.Printf("Failed to update status for %s: %v", orderID, err)
+	// Update Order to Status=3 (Delivered)
+	if err := service.repo.UpdateOrderDelivered(orderID, 3); err != nil {
+		log.Printf("Failed to update status for %s to Status 3: %v", orderID, err)
 	} else {
 		log.Printf("Order %s Delivered!", orderID)
 	}

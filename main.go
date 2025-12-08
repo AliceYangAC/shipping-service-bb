@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
@@ -35,15 +36,22 @@ func main() {
 	// start background shipping worker
 	go StartShippingWorker(shippingService)
 
-	// 3. Start HTTP Server
-	r := gin.Default()
-	r.Use(cors.Default())
-	r.POST("/", func(c *gin.Context) {
+	// start HTTP Server
+	router := gin.Default()
+	router.SetTrustedProxies([]string{"127.0.0.1", "::1", "172.18.0.0/16"})
+	router.Use(cors.Default())
+	router.POST("/", func(c *gin.Context) {
 		handleShipRequest(c)
+	})
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"version": os.Getenv("APP_VERSION"),
+		})
 	})
 
 	log.Printf("Shipping Service running on :3003")
-	r.Run(":3003")
+	router.Run(":3003")
 }
 
 func handleShipRequest(c *gin.Context) {
@@ -95,7 +103,7 @@ func getEnvVar(varName string, fallbackVarNames ...string) string {
 
 // Initializes the database based on the API type
 func initDatabase(apiType string) (*ShippingService, error) {
-	dbURI := getEnvVar("AZURE_COSMOS_RESOURCEENDPOINT", "SHIPPING_DB_URI")
+	dbURI := getEnvVar("AZURE_COSMOS_RESOURCEENDPOINT", "MONGO_URI")
 	dbName := getEnvVar("SHIPPING_DB_NAME")
 
 	switch apiType {
@@ -126,6 +134,9 @@ func initDatabase(apiType string) (*ShippingService, error) {
 		}
 	default:
 		collectionName := getEnvVar("SHIPPING_DB_COLLECTION_NAME")
+		if collectionName == "" {
+			collectionName = "orders"
+		}
 		dbUsername := os.Getenv("SHIPPING_DB_USERNAME")
 		dbPassword := os.Getenv("SHIPPING_DB_PASSWORD")
 		mongoRepo, err := NewMongoDBShippingRepo(dbURI, dbName, collectionName, dbUsername, dbPassword)

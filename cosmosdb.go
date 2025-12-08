@@ -16,9 +16,8 @@ type PartitionKey struct {
 
 type CosmosDBServiceRepo struct {
 	// We need clients for BOTH containers
-	ordersContainer    *azcosmos.ContainerClient
-	shipmentsContainer *azcosmos.ContainerClient
-	partitionKey       PartitionKey
+	ordersContainer *azcosmos.ContainerClient
+	partitionKey    PartitionKey
 }
 
 func NewCosmosDBServiceRepoWithManagedIdentity(cosmosDbEndpoint string, dbName string, containerName string, partitionKey PartitionKey) (*CosmosDBServiceRepo, error) {
@@ -55,53 +54,23 @@ func NewCosmosDBServiceRepo(cosmosDbEndpoint string, dbName string, containerNam
 
 // Helper to initialize both container clients
 func createContainerClients(client *azcosmos.Client, dbName string, pk PartitionKey) (*CosmosDBServiceRepo, error) {
-	// Hardcode or fetch env vars for the specific container names
-	// Assuming 'orders' and 'shipments' are the names
+
 	ordersContainer, err := client.NewContainer(dbName, "orders")
 	if err != nil {
 		return nil, err
 	}
 
-	shipmentsContainer, err := client.NewContainer(dbName, "shipments")
-	if err != nil {
-		return nil, err
-	}
-
 	return &CosmosDBServiceRepo{
-		ordersContainer:    ordersContainer,
-		shipmentsContainer: shipmentsContainer,
-		partitionKey:       pk,
+		ordersContainer: ordersContainer,
+		partitionKey:    pk,
 	}, nil
 }
 
-// --- INTERFACE IMPLEMENTATION ---
-
-// 1. InsertShipment
-func (r *CosmosDBServiceRepo) InsertShipment(record ShipmentRecord) error {
-	ctx := context.Background()
-
-	// Ensure Partition Key is set if needed by your schema
-	// For shipments, we usually use OrderID or a specific location as PK
-	// For this example, we assume the record struct has the necessary fields.
-
-	marshalled, err := json.Marshal(record)
-	if err != nil {
-		return err
-	}
-
-	// Use the partition key passed in config, or derive from record
-	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
-
-	_, err = r.shipmentsContainer.CreateItem(ctx, pk, marshalled, nil)
-	return err
-}
-
-// 2. UpdateOrderStatus
-func (r *CosmosDBServiceRepo) UpdateOrderStatus(orderID string, status int, duration int) error {
+func (r *CosmosDBServiceRepo) UpdateOrderDelivered(orderID string, status int) error {
 	ctx := context.Background()
 	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
 
-	// A. Find the internal Cosmos 'id' using the OrderID
+	// Find the internal Cosmos 'id' using the OrderID
 	var existingId string
 	query := "SELECT * FROM o WHERE o.orderId = @orderId"
 	opt := &azcosmos.QueryOptions{
@@ -135,11 +104,75 @@ func (r *CosmosDBServiceRepo) UpdateOrderStatus(orderID string, status int, dura
 		return nil
 	}
 
-	// B. Patch the status
+	// Prepare the Patch to update only the status
 	patch := azcosmos.PatchOperations{}
 	patch.AppendReplace("/status", status)
-	patch.AppendReplace("/duration", duration)
 
+	// Execute the Patch
 	_, err := r.ordersContainer.PatchItem(ctx, pk, existingId, patch, nil)
+	return err
+}
+
+func (r *CosmosDBServiceRepo) UpdateOrderShipmentInfo(orderID string, status int, shipment ShipmentRecord) error {
+	ctx := context.Background()
+	pk := azcosmos.NewPartitionKeyString(r.partitionKey.Value)
+
+	// Find the internal Cosmos 'id' using the OrderID
+	var existingId string
+	query := "SELECT * FROM o WHERE o.orderId = @orderId"
+	opt := &azcosmos.QueryOptions{
+		QueryParameters: []azcosmos.QueryParameter{
+			{Name: "@orderId", Value: orderID},
+		},
+	}
+
+	pager := r.ordersContainer.NewQueryItemsPager(query, pk, opt)
+
+	for pager.More() {
+		resp, err := pager.NextPage(ctx)
+		if err != nil {
+			log.Printf("Query error: %v", err)
+			return err
+		}
+		for _, bytes := range resp.Items {
+			var doc map[string]interface{}
+			if err := json.Unmarshal(bytes, &doc); err == nil {
+				existingId = doc["id"].(string)
+				break
+			}
+		}
+		if existingId != "" {
+			break
+		}
+	}
+
+	if existingId == "" {
+		log.Printf("Order %s not found in CosmosDB", orderID)
+		return nil
+	}
+
+	// Prepare the shipment object for adding into shipping field
+	shipmentBytes, err := json.Marshal(shipment)
+	if err != nil {
+		return err
+	}
+	var shipmentJson map[string]interface{}
+	if err := json.Unmarshal(shipmentBytes, &shipmentJson); err != nil {
+		return err
+	}
+
+	// C. Patch the status and embed the full shipment object
+	patch := azcosmos.PatchOperations{}
+
+	// 1. Patch the root status field
+	patch.AppendReplace("/status", status)
+
+	// Add duration, startAt, and trackingNumber under shipping
+	patch.AppendReplace("/shipping/duration", shipmentJson["duration"])
+	patch.AppendReplace("/shipping/trackingNumber", shipmentJson["trackingNumber"])
+	patch.AppendReplace("/shipping/shippedAt", shipmentJson["shippedAt"])
+
+	// D. Execute the Patch
+	_, err = r.ordersContainer.PatchItem(ctx, pk, existingId, patch, nil)
 	return err
 }
