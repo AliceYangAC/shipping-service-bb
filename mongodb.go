@@ -16,6 +16,7 @@ type MongoDBShippingRepo struct {
 	ordersCollection *mongo.Collection
 }
 
+// NewMongoDBShippingRepo creates a new MongoDBShippingRepo
 func NewMongoDBShippingRepo(mongoUri string, mongoDb string, mongoCollection string, mongoUser string, mongoPassword string) (*MongoDBShippingRepo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -43,6 +44,7 @@ func NewMongoDBShippingRepo(mongoUri string, mongoDb string, mongoCollection str
 	}, nil
 }
 
+// UpdateOrderDelivered updates an order's status to delivered
 func (r *MongoDBShippingRepo) UpdateOrderDelivered(orderID string, status int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -72,7 +74,7 @@ func (r *MongoDBShippingRepo) UpdateOrderDelivered(orderID string, status int) e
 	return nil
 }
 
-// UpdateOrderShipmentInfo is the comprehensive update method
+// UpdateOrderShipmentInfo is the comprehensive update method to set shipment info and status
 func (r *MongoDBShippingRepo) UpdateOrderShipmentInfo(orderID string, status int, shipment ShipmentRecord) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
