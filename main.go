@@ -16,6 +16,7 @@ const (
 	AZURE_COSMOS_DB_SQL_API = "cosmosdbsql"
 )
 
+// Main entry point
 func main() {
 	var shippingService *ShippingService
 
@@ -54,6 +55,7 @@ func main() {
 	router.Run(":3003")
 }
 
+// Handles incoming ship requests via HTTP
 func handleShipRequest(c *gin.Context) {
 	var req ShippingRequest
 	if err := c.BindJSON(&req); err != nil {

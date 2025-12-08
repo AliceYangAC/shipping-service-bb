@@ -61,6 +61,7 @@ func StartShippingWorker(service *ShippingService) {
 	}
 }
 
+// processMessage handles an individual shipping message
 func processMessage(ctx context.Context, service *ShippingService, receiver *azservicebus.Receiver, msg *azservicebus.ReceivedMessage) {
 	var req ShippingRequest
 	if err := json.Unmarshal(msg.Body, &req); err != nil {
@@ -98,6 +99,7 @@ func processMessage(ctx context.Context, service *ShippingService, receiver *azs
 	go simulateDelivery(service, req.OrderID, duration, shipmentDetails)
 }
 
+// simulateDelivery simulates the delivery process; in the future this could be a separate service, logistics-service
 func simulateDelivery(service *ShippingService, orderID string, duration int, shipmentDetails ShipmentRecord) {
 	log.Printf("Order %s is In Transit (%ds)...", orderID, duration)
 
@@ -111,6 +113,7 @@ func simulateDelivery(service *ShippingService, orderID string, duration int, sh
 	}
 }
 
+// calculateDuration determines simulated shipping duration based on postal code
 func calculateDuration(postalCode string) int {
 	normalized := strings.ToUpper(strings.ReplaceAll(postalCode, " ", ""))
 	if strings.HasPrefix(normalized, "K") {
