@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
@@ -35,16 +36,22 @@ func main() {
 	// start background shipping worker
 	go StartShippingWorker(shippingService)
 
-	// 3. Start HTTP Server
-	r := gin.Default()
-	r.SetTrustedProxies([]string{"127.0.0.1", "::1", "172.18.0.0/16"})
-	r.Use(cors.Default())
-	r.POST("/", func(c *gin.Context) {
+	// start HTTP Server
+	router := gin.Default()
+	router.SetTrustedProxies([]string{"127.0.0.1", "::1", "172.18.0.0/16"})
+	router.Use(cors.Default())
+	router.POST("/", func(c *gin.Context) {
 		handleShipRequest(c)
+	})
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"version": os.Getenv("APP_VERSION"),
+		})
 	})
 
 	log.Printf("Shipping Service running on :3003")
-	r.Run(":3003")
+	router.Run(":3003")
 }
 
 func handleShipRequest(c *gin.Context) {
